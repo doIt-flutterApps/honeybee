@@ -4,8 +4,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
-// import 'package:honeybee/view/intro/intro_page.dart';
-import 'admin/hobby_add_page.dart';
+import 'package:honeybee/view/intro/intro_page.dart';
+// import 'admin/hobby_add_page.dart';
 import 'data/constant.dart';
 import 'firebase_options.dart';
 
@@ -102,8 +102,8 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      // home: const IntroPage(),
-      home: HobbyAddPage(),
+      home: const IntroPage(),
+      // home: HobbyAddPage(),
     );
   }
 }

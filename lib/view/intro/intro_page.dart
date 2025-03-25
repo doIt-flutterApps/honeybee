@@ -9,6 +9,8 @@ import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/user.dart';
 import '../auth/auth_page.dart';
+import '../hobby/hobby_selection_page.dart';
+
 class IntroPage extends StatefulWidget {
   const IntroPage({super.key});
 
@@ -83,6 +85,7 @@ class _IntroPage extends State<IntroPage> {
                             // 메인 페이지로 이동하기
                           } else {
                             // 취미 선택 페이지로 이동하기
+                            Get.off(HobbySelectionPage());
                           }
                         });
                       } else {
