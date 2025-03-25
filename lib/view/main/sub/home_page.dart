@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../data/user.dart';
+import 'package:honeybee/view/main/sub/comment_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -128,6 +129,7 @@ class _HomePage extends State<HomePage> {
                       ElevatedButton(
                         onPressed: () {
                           // 상세 페이지로 이동하기
+                          Get.to(CommentPage(selectedPost: _posts[index]));
                         },
                         child: Text('Comment'),
                       ),
