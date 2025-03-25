@@ -133,6 +133,15 @@ class _DrawPage extends State<DrawPage> {
                       .collection('posts')
                       .add(post);
                   _textEditingController.clear();
+                  http.post(
+                    Uri.parse(
+                      'https://sendpostnotification-vk4ivw6l2q-uc.a.run.app',
+                    ),
+                    headers: <String, String>{
+                      'Content-Type': 'application/json; charset=UTF-8',
+                    },
+                    body: jsonEncode(<String, String>{'hobby': user.hobby!}),
+                  );
                 },
                 child: Text('Post'),
                 style: ElevatedButton.styleFrom(
