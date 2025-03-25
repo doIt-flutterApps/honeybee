@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:honeybee/view/main/sub/home_page.dart';
 import 'package:honeybee/view/main/sub/draw_page.dart';
 import 'package:honeybee/view/main/sub/search_page.dart';
+import 'package:honeybee/view/main/sub/profile_page.dart';
 
 class MainPage extends StatefulWidget {
   @override
@@ -56,7 +57,7 @@ class _MainPage extends State<MainPage> {
       case 2:
         return DrawPage();
       case 3:
-      // return ProfilePage();
+        return ProfilePage();
     }
   }
 }
