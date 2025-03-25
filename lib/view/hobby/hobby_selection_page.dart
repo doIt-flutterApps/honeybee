@@ -6,6 +6,7 @@ import 'package:honeybee/data/user.dart';
 import 'package:honeybee/view/hobby/hobby_api.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/constant.dart';
+import 'package:honeybee/view/main/main_page.dart';
 
 class HobbySelectionPage extends StatefulWidget {
   const HobbySelectionPage({super.key});
@@ -115,6 +116,7 @@ class _HobbySelectionPageState extends State<HobbySelectionPage> {
                           final SharedPreferences preferences =
                               await SharedPreferences.getInstance();
                           preferences.setString("hobby", myHobby);
+                          Get.off(MainPage());
                         });
                   },
                   child: Text('다음'),

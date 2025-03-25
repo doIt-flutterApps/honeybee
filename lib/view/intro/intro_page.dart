@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/user.dart';
 import '../auth/auth_page.dart';
 import '../hobby/hobby_selection_page.dart';
+import 'package:honeybee/view/main/main_page.dart';
 
 class IntroPage extends StatefulWidget {
   const IntroPage({super.key});
@@ -76,45 +77,43 @@ class _IntroPage extends State<IntroPage> {
             case ConnectionState.done:
               if (snapshot.data != null) {
                 // if (snapshot.data!) {
-                  _notiPermissionCheck().then((value) {
-                    _loginCheck().then((value) {
-                      if (value == true) {
-                        Future.delayed(const Duration(seconds: 2), () {
-                          Get.snackbar(Constant.APP_NAME, '로그인했습니다.');
-                          if (user.hobby != null) {
-                            // 메인 페이지로 이동하기
-                          } else {
-                            // 취미 선택 페이지로 이동하기
-                            Get.off(HobbySelectionPage());
-                          }
-                        });
-                      } else {
-                        Future.delayed(const Duration(seconds: 2), () {
-                          // 회원 가입 페이지로 이동하기
-                          Get.off(const AuthPage());
-                        });
-                      }
-                    });
+                _notiPermissionCheck().then((value) {
+                  _loginCheck().then((value) {
+                    if (value == true) {
+                      Future.delayed(const Duration(seconds: 2), () {
+                        Get.snackbar(Constant.APP_NAME, '로그인했습니다.');
+                        if (user.hobby != null) {
+                          // 메인 페이지로 이동하기
+                          Get.off(MainPage());
+                        } else {
+                          // 취미 선택 페이지로 이동하기
+                          Get.off(HobbySelectionPage());
+                        }
+                      });
+                    } else {
+                      Future.delayed(const Duration(seconds: 2), () {
+                        // 회원 가입 페이지로 이동하기
+                        Get.off(const AuthPage());
+                      });
+                    }
                   });
-                  return Container(
-                    color: Colors.greenAccent,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            Constant.APP_NAME,
-                            style: TextStyle(
-                              fontSize: 50,
-                              fontFamily: 'clover',
-                            ),
-                          ),
-                          SizedBox(height: 20),
-                          Lottie.asset('res/animation/honeybee.json'),
-                        ],
-                      ),
+                });
+                return Container(
+                  color: Colors.greenAccent,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text(
+                          Constant.APP_NAME,
+                          style: TextStyle(fontSize: 50, fontFamily: 'clover'),
+                        ),
+                        SizedBox(height: 20),
+                        Lottie.asset('res/animation/honeybee.json'),
+                      ],
                     ),
-                  );
+                  ),
+                );
                 // } else {
                 //   return AlertDialog(
                 //     title: Text(Constant.APP_NAME),
