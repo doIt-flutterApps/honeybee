@@ -8,7 +8,7 @@ import 'package:honeybee/data/constant.dart';
 import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/user.dart';
-
+import '../auth/auth_page.dart';
 class IntroPage extends StatefulWidget {
   const IntroPage({super.key});
 
@@ -73,7 +73,7 @@ class _IntroPage extends State<IntroPage> {
               return const Center(child: CircularProgressIndicator());
             case ConnectionState.done:
               if (snapshot.data != null) {
-                if (snapshot.data!) {
+                // if (snapshot.data!) {
                   _notiPermissionCheck().then((value) {
                     _loginCheck().then((value) {
                       if (value == true) {
@@ -88,6 +88,7 @@ class _IntroPage extends State<IntroPage> {
                       } else {
                         Future.delayed(const Duration(seconds: 2), () {
                           // 회원 가입 페이지로 이동하기
+                          Get.off(const AuthPage());
                         });
                       }
                     });
@@ -111,16 +112,16 @@ class _IntroPage extends State<IntroPage> {
                       ),
                     ),
                   );
-                } else {
-                  return AlertDialog(
-                    title: Text(Constant.APP_NAME),
-                    content: Text(
-                      '인터넷에 연결되지 않아 '
-                      '허니비 SNS를 사용할 수 없습니다.',
-                    ),
-                    actions: [],
-                  );
-                }
+                // } else {
+                //   return AlertDialog(
+                //     title: Text(Constant.APP_NAME),
+                //     content: Text(
+                //       '인터넷에 연결되지 않아 '
+                //       '허니비 SNS를 사용할 수 없습니다.',
+                //     ),
+                //     actions: [],
+                //   );
+                // }
               } else {
                 return const Center(child: Text('데이터가 없습니다.'));
               }
