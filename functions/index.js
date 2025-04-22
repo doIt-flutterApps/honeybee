@@ -1,59 +1,194 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
-admin.initializeApp();
-exports.sendPostNotification = functions
-    .https.onRequest(async (req, res) => {
-      const hobby = req.body.hobby;
-      const payload = {
-        notification: {
-          title: "새로운 Post 추가",
-          body: "당신의 취미에 새로운 글이 추가되었습니다.",
-        },
-      };
-      try {
-        const querySnapshot = await admin.firestore().collection("users")
-            .where("hobby", "==", hobby).get();
-        const tokens = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          if (data.hobbyNoti) {
-            tokens.push(data.fcm);
-            console.log(tokens);
-          }
-        });
-        if (tokens.length > 0) {
-          const response = await admin.messaging()
-              .sendToDevice(tokens, payload);
-          console.log("Successfully sent message:", response);
-          res.status(200).send("Successfully sent message");
-        } else {
-          res.status(500).send("not found tokens");
+import { onRequest } from "firebase-functions/v2/https";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
+import * as logger from "firebase-functions/logger";
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
+
+initializeApp();
+
+const FUNCTION_REGION = "asia-northeast3";
+const DEFAULT_OPTIONS = {
+  region: FUNCTION_REGION,
+};
+
+export const sendPostNotification = onRequest(
+  { ...DEFAULT_OPTIONS, timeoutSeconds: 120 },
+  async (request, response) => {
+    const hobby = request.body.hobby;
+
+    if (!hobby) {
+      response.status(400).send("잘못된 요청: 요청 본문에 'hobby' 필드가 없습니다.");
+      return;
+    }
+
+    const notification = {
+      title: "새로운 Post 추가", // 알림 내용은 이미 한글
+      body: "당신의 취미에 새로운 글이 추가되었습니다.", // 알림 내용은 이미 한글
+    };
+
+    try {
+      const db = getFirestore();
+      const usersRef = db.collection("users");
+      const querySnapshot = await usersRef
+        .where("hobby", "==", hobby)
+        .where("hobbyNoti", "==", true)
+        .get();
+
+      const messages = [];
+      const tokens = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.fcm && typeof data.fcm === 'string' && data.fcm.length > 0
+            && data.hobbyNoti === true) {
+          tokens.push(data.fcm);
+        } else if (data.fcm && data.hobbyNoti === true) {
+            logger.warn(`Invalid FCM token found for user ${doc.id}: ${data.fcm}`);
         }
-      } catch (error) {
-        console.error("Error sending push notification:", error);
-        res.status(500).send("Error sending message" + error);
-      }
-    });
-exports.commentPushNotification = functions
-    .firestore.onDocumentCreated("posts/{postId}/comments/{commentId}",
-        async (snapshot, context) => {
-          const postId = context.params.postId;
-          const postSnapshot = await admin.firestore()
-              .collection("posts").doc(postId).get();
-          const post = postSnapshot.data();
-          const user = post.user;
-          const payload = {
-            notification: {
-              title: "새로운 댓글",
-              body: post.content,
-            },
-          };
-          const userSnapshot = await admin.firestore()
-              .collection("users").doc(user).get();
-          console.log("userSnapshot.commentNoti" +
-          userSnapshot.data().commentNoti);
-          if (userSnapshot.data().commentNoti) {
-            const userToken = userSnapshot.data().fcm;
-            await admin.messaging().sendToDevice(userToken, payload);
-          }
+      });
+
+      if (tokens.length > 0) {
+        const messaging = getMessaging();
+        tokens.forEach((token) => {
+          messages.push({
+            token: token,
+            notification: notification,
+          });
         });
+
+        const batchResponse = await messaging.sendEach(messages);
+        // 성공 카운트 로깅
+        logger.info(`Successfully sent ${batchResponse.successCount} messages`);
+
+        if (batchResponse.failureCount > 0) {
+          // 실패 카운트 로깅
+          logger.warn(`Failed to send ${batchResponse.failureCount} messages`);
+          const failedTokens = [];
+          batchResponse.responses.forEach((resp, idx) => {
+            if (!resp.success) {
+              const errorCode = resp.error?.code;
+              const errorMessage = resp.error?.message;
+              logger.error(`Failed to send message to token ${messages[idx].token}:
+                ${errorCode} - ${errorMessage}`);
+              if (
+                errorCode === "messaging/invalid-registration-token" ||
+                errorCode === "messaging/registration-token-not-registered" ||
+                (errorCode === "messaging/invalid-argument" &&
+                  // 오류 메시지 포함 확인하기
+                  errorMessage?.includes("valid FCM registration token"))
+              ) {
+                failedTokens.push(messages[idx].token);
+                // 로그 메시지 한글화(선택)
+                logger.warn(`잘못된 토큰 제거 예정: ${messages[idx].token}`);
+              }
+            }
+          });
+        }
+        response.status(200).send(`알림 전송 완료: ${batchResponse.successCount}건 성공,
+          ${batchResponse.failureCount}건 실패`);
+      } else {
+        // 로그 메시지 한글화
+        logger.info("해당 취미의 사용자나 알림을 설정한 사용자가 없습니다.");
+        response.status(200).send("알림을 보낼 대상 사용자가 없습니다.");
+      }
+    } catch (error) {
+      // 오류 로깅 강화하기
+      logger.error("알림 전송 중 오류 발생:", error);
+      response.status(500).send("내부 서버 오류: 메시지를 보낼 수 없습니다.");
+    }
+  }
+);
+
+export const commentPushNotification = onDocumentCreated(
+  {
+    ...DEFAULT_OPTIONS,
+    document: "posts/{postId}/comments/{commentId}",
+  },
+  async (event) => {
+    const params = event.params;
+    const postId = params.postId;
+     // 새로 생성된 댓글 데이터 가져오기
+    const commentData = event.data?.data();
+
+    if (!commentData) {
+        logger.error("댓글 데이터가 없습니다.");
+        return null;
+    }
+
+    try {
+      const db = getFirestore();
+      const postRef = db.collection("posts").doc(postId);
+      const postSnapshot = await postRef.get();
+
+      if (!postSnapshot.exists) {
+        logger.error(`ID가 ${postId}인 게시글 문서를 찾을 수 없습니다.`);
+        return null;
+      }
+
+      const post = postSnapshot.data();
+      if (!post?.user || !post?.content) {
+        logger.error(`게시글 ${postId}에 'user' 또는 'content' 필드가 없습니다.`);
+        return null;
+      }
+      const postAuthorId = post.user;
+      const postContentSnippet = post.content.substring(0, 50)
+        + (post.content.length > 50 ? "..." : ""); // 미리보기 길이 조정(50자)
+
+      const userRef = db.collection("users").doc(postAuthorId);
+      const userSnapshot = await userRef.get();
+
+      if (!userSnapshot.exists) {
+        logger.warn(`게시글 작성자 ID ${postAuthorId} 사용자를 찾을 수 없습니다.`);
+        return null;
+      }
+
+      const userData = userSnapshot.data();
+      if (userData?.commentNoti === true && userData?.fcm) {
+        const userToken = userData.fcm;
+
+        const notification = {
+          title: "새로운 댓글 알림",
+          // 댓글 내용 일부 포함 가능(예: commentData.content 사용)
+          body: `회원님의 게시글 "${postContentSnippet}"에 새로운 댓글이 달렸습니다.`,
+        };
+
+        const message = {
+          token: userToken,
+          notification: notification,
+        };
+
+        const messaging = getMessaging();
+        try {
+          const response = await messaging.send(message);
+          logger.info(`댓글 알림 성공적으로 전송됨 (사용자 ID: ${postAuthorId},
+                        메시지 ID: ${response})`);
+        } catch (error) { // 오류 유형 명시하기
+          logger.error(`사용자 ID ${postAuthorId}에게 댓글 알림 전송 실패:`, error);
+
+          const errorCode = error.code;
+          const errorMessage = error.message;
+          if (
+            errorCode === "messaging/invalid-registration-token" ||
+            errorCode === "messaging/registration-token-not-registered" ||
+            (errorCode === "messaging/invalid-argument" &&
+              errorMessage?.includes("valid FCM registration token"))
+          ) {
+            logger.warn(`잘못된 토큰 제거 예정 (사용자 ID: ${postAuthorId}):
+                          ${userToken}`);
+            await userRef.update({ fcm: null });
+          }
+        }
+      } else {
+        if (userData?.commentNoti !== true) {
+            logger.info(`사용자 ID ${postAuthorId}가 댓글 알림을 설정하지 않았습니다.`);
+        }
+        if (!userData?.fcm) {
+            logger.info(`사용자 ID ${postAuthorId}의 FCM 토큰이 없습니다.`);
+        }
+      }
+    } catch (error) {
+      logger.error("댓글 알림 처리 중 오류 발생:", error);
+    }
+    return null;
+  }
+);

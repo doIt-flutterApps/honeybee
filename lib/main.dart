@@ -1,36 +1,35 @@
-// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:get/get.dart';
-import 'package:honeybee/view/intro/intro_page.dart';
-// import 'admin/hobby_add_page.dart';
 import 'data/constant.dart';
 import 'firebase_options.dart';
+import 'view/intro/intro_page.dart';
 
-// 앱이 백그라운드에 있을 때 앱을 처리하는 함수
-// 백그라운드에서 파이어베이스를 호출하여 알림을 보여 줌
+// 백그라운드 메시지 핸들러
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await setupFlutterNotifications();
   showFlutterNotification(message);
+  // 백그라운드에서 다른 Firebase 서비스를 사용하려면 `initializeApp`을 호출해야 합니다.
   print('Handling a background message ${message.messageId}');
 }
 
+// 헤드업 알림을 위한 [AndroidNotificationChannel] 생성하기
 late AndroidNotificationChannel channel;
 bool isFlutterLocalNotificationsInitialized = false;
-// 플러터 알림 관련 설정하기
-// 안드로이드는 채널을 등록해야 하므로 다음과 같은 설정이 필요함
+
+// Flutter Local Notifications 설정하기
 Future<void> setupFlutterNotifications() async {
   if (isFlutterLocalNotificationsInitialized) {
     return;
   }
   channel = const AndroidNotificationChannel(
-    'honey_bee_channel', // id
-    'SNS 알림', // title
-    description: '허니비 앱에서 사용하는 SNS 알림입니다.', // description
+    'honey_bee_channel', // 채널 ID
+    'SNS 알림', // 채널 이름
+    description: '허니비 앱에서 사용하는 SNS 알림입니다', // 채널 설명
     importance: Importance.high,
   );
   flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -39,7 +38,6 @@ Future<void> setupFlutterNotifications() async {
         AndroidFlutterLocalNotificationsPlugin
       >()
       ?.createNotificationChannel(channel);
-  // 알림을 보낼 때 어떻게 보낼지 정의하기(알림 창, 배지, 소리)
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true,
     badge: true,
@@ -48,8 +46,6 @@ Future<void> setupFlutterNotifications() async {
   isFlutterLocalNotificationsInitialized = true;
 }
 
-// 알림을 직접 보이는 함수
-// 서버에서 전달하는 데이터를 message 클래스에 담아서 각각 보여 줌
 void showFlutterNotification(RemoteMessage message) {
   RemoteNotification? notification = message.notification;
   AndroidNotification? android = message.notification?.android;
@@ -82,28 +78,53 @@ void main() async {
 
 String? initialMessage;
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    FirebaseMessaging.instance.getInitialMessage().then((value) {
-      initialMessage = value?.data.toString();
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  String? _token;
+
+  @override
+  void initState() {
+    super.initState();
+    // 초기 메시지 처리하기
+    FirebaseMessaging.instance.getInitialMessage().then((
+      RemoteMessage? message,
+    ) {
+      setState(() {
+        initialMessage = message?.data.toString();
+      });
     });
-    // 앱이 실행될 때 메시지를 받으면 처리하는 콜백 함수
+    // 포그라운드 메시지 리스너
     FirebaseMessaging.onMessage.listen(showFlutterNotification);
-    // 앱이 백그라운드에서 실행 중일 때 사용자가 알림을 탭하여 앱을 열 때 호출
+    // 앱이 백그라운드에서 열렸을 때의 리스너
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       print('A new onMessageOpenedApp event was published!');
+      // 필요하다면 특정 화면으로 이동하는 로직 등을 추가할 수 있습니다.
     });
+    // FCM 토큰 가져오기
+    FirebaseMessaging.instance.getToken().then((String? token) {
+      setState(() {
+        _token = token;
+      });
+      print('FCM Token: $token');
+      // 이 토큰을 서버에 저장하거나 특정 용도로 사용할 수 있습니다.
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return GetMaterialApp(
       title: Constant.APP_NAME,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const IntroPage(),
-      // home: HobbyAddPage(),
+      home: IntroPage(),
     );
   }
 }

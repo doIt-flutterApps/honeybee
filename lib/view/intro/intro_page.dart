@@ -8,9 +8,6 @@ import 'package:honeybee/data/constant.dart';
 import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/user.dart';
-import '../auth/auth_page.dart';
-import '../hobby/hobby_selection_page.dart';
-import 'package:honeybee/view/main/main_page.dart';
 
 class IntroPage extends StatefulWidget {
   const IntroPage({super.key});
@@ -22,6 +19,9 @@ class IntroPage extends StatefulWidget {
 }
 
 class _IntroPage extends State<IntroPage> {
+  final Connectivity _connectivity = Connectivity();
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  bool _isDialogOpen = false; // 대화 상자 표시 여부
   late HoneyBeeUser user;
 
   Future<bool> _notiPermissionCheck() async {
@@ -56,7 +56,9 @@ class _IntroPage extends State<IntroPage> {
           uid: auth.currentUser!.uid,
         );
         user.hobby = hobby;
-        Get.put(user);
+        // Get.put(user);
+        Get.lazyPut(() => user);
+        await Future.delayed(const Duration(seconds: 2));
         return true;
       } on FirebaseAuthException catch (e) {
         return false;
@@ -67,84 +69,127 @@ class _IntroPage extends State<IntroPage> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _checkInternetConnection(); // 초기 연결 상태 확인하기
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
+      _updateConnectionStatus,
+    );
+  }
+
+  Future<void> _checkInternetConnection() async {
+    var connectivityResult = await _connectivity.checkConnectivity();
+    _handleConnectionStatus(connectivityResult);
+  }
+
+  void _updateConnectionStatus(List<ConnectivityResult> result) {
+    _handleConnectionStatus(result);
+  }
+
+  void _handleConnectionStatus(List<ConnectivityResult> result) {
+    for (var element in result) {
+      if (element == ConnectivityResult.mobile ||
+          element == ConnectivityResult.wifi) {
+        if (_isDialogOpen) {
+          Navigator.of(context).pop(); // 대화 상자 닫기
+          _isDialogOpen = false;
+        }
+        // _notiPermissionCheck().then((value) {
+        // });
+      } else {
+        // 인터넷 연결 안 됨
+        _showOfflineDialog();
+      }
+    }
+  }
+
+  void _showOfflineDialog() {
+    if (!_isDialogOpen && mounted) {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          _isDialogOpen = true;
+          return AlertDialog(
+            title: const Text('심리 테스트 앱'),
+            content: const Text(
+              '지금 인터넷에 연결되지 않아 심리 테스트 앱을 사용할 수 없습니다. '
+                  '나중에 다시 실행해 주세요.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _isDialogOpen = false;
+                },
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      ).then((_) => _isDialogOpen = false); // 대화 상자 닫힐 때 _isDialogOpen = false
+    }
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription.cancel(); // StreamSubscription 해제하기
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: FutureBuilder(
-        builder: (context, snapshot) {
+        future: _notiPermissionCheck(),
+        builder: (buildContext, snapshot) {
           switch (snapshot.connectionState) {
+            case ConnectionState.none:
+              return introView();
+            case ConnectionState.waiting:
+              return introView();
             case ConnectionState.active:
-              return const Center(child: CircularProgressIndicator());
+              return introView();
             case ConnectionState.done:
-              if (snapshot.data != null) {
-                // if (snapshot.data!) {
-                _notiPermissionCheck().then((value) {
-                  _loginCheck().then((value) {
-                    if (value == true) {
-                      Future.delayed(const Duration(seconds: 2), () {
-                        Get.snackbar(Constant.APP_NAME, '로그인했습니다.');
-                        if (user.hobby != null) {
-                          // 메인 페이지로 이동하기
-                          Get.off(MainPage());
-                        } else {
-                          // 취미 선택 페이지로 이동하기
-                          Get.off(HobbySelectionPage());
-                        }
-                      });
+              _loginCheck().then((value) {
+                if (value == true) {
+                  Future.delayed(const Duration(seconds: 2), () {
+                    Get.snackbar(Constant.APP_NAME, '로그인했습니다.');
+                    if (user.hobby != null) {
+                      // 메인 페이지로 이동하기
                     } else {
-                      Future.delayed(const Duration(seconds: 2), () {
-                        // 회원 가입 페이지로 이동하기
-                        Get.off(const AuthPage());
-                      });
+                      // 취미 선택 페이지로 이동하기
                     }
                   });
-                });
-                return Container(
-                  color: Colors.greenAccent,
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          Constant.APP_NAME,
-                          style: TextStyle(fontSize: 50, fontFamily: 'clover'),
-                        ),
-                        SizedBox(height: 20),
-                        Lottie.asset('res/animation/honeybee.json'),
-                      ],
-                    ),
-                  ),
-                );
-                // } else {
-                //   return AlertDialog(
-                //     title: Text(Constant.APP_NAME),
-                //     content: Text(
-                //       '인터넷에 연결되지 않아 '
-                //       '허니비 SNS를 사용할 수 없습니다.',
-                //     ),
-                //     actions: [],
-                //   );
-                // }
-              } else {
-                return const Center(child: Text('데이터가 없습니다.'));
-              }
-            case ConnectionState.waiting:
-              return const Center(child: CircularProgressIndicator());
-            case ConnectionState.none:
-              return const Center(child: Text('데이터가 없습니다.'));
+                } else {
+                  Future.delayed(const Duration(seconds: 2), () {
+                    // 회원 가입 페이지로 이동하기
+                    print('로그인 안 됨');
+                  });
+                }
+              });
+              return introView();
           }
         },
-        future: connectCheck(),
       ),
     );
   }
 
-  Future<bool> connectCheck() async {
-    var connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult == ConnectivityResult.mobile ||
-        connectivityResult == ConnectivityResult.wifi) {
-      return true;
-    } else {
-      return false;
-    }
+  Widget introView() {
+    return Container(
+      color: Colors.greenAccent,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              Constant.APP_NAME,
+              style: TextStyle(fontSize: 50, fontFamily: 'clover'),
+            ),
+            SizedBox(height: 20),
+            Lottie.asset('res/animation/honeybee.json'),
+          ],
+        ),
+      ),
+    );
   }
 }
